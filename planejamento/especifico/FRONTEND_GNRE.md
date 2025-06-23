@@ -794,6 +794,510 @@ export function initPerformanceMonitoring() {
 }
 ```
 
+## 🚀 Melhorias Avançadas de UX/Performance
+
+### 9.1. Micro-Frontends Architecture
+```typescript
+// src/lib/micro-frontends.ts
+interface MicroFrontendConfig {
+  name: string;
+  url: string;
+  scope: string;
+  module: string;
+}
+
+class MicroFrontendLoader {
+  private loadedModules = new Map<string, any>();
+
+  async loadMicroFrontend(config: MicroFrontendConfig) {
+    if (this.loadedModules.has(config.name)) {
+      return this.loadedModules.get(config.name);
+    }
+
+    // Carregar script dinamicamente
+    await this.loadScript(config.url);
+
+    // Acessar módulo federado
+    const container = (window as any)[config.scope];
+    await container.init(__webpack_share_scopes__.default);
+
+    const factory = await container.get(config.module);
+    const module = factory();
+
+    this.loadedModules.set(config.name, module);
+    return module;
+  }
+
+  private loadScript(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = () => resolve();
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+}
+
+// Componente para carregar micro-frontends
+export function MicroFrontend({
+  name,
+  config,
+  fallback
+}: {
+  name: string;
+  config: MicroFrontendConfig;
+  fallback: React.ReactNode;
+}) {
+  const [Component, setComponent] = useState<React.ComponentType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loader = new MicroFrontendLoader();
+
+    loader.loadMicroFrontend(config)
+      .then(module => {
+        setComponent(() => module.default || module);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [config]);
+
+  if (loading) return <div>Carregando {name}...</div>;
+  if (error) return <div>Erro ao carregar {name}: {error}</div>;
+  if (!Component) return fallback;
+
+  return <Component />;
+}
+```
+
+### 9.2. Advanced State Management com Zustand
+```typescript
+// src/stores/gnre-store.ts
+import { create } from 'zustand';
+import { devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+
+interface GNREState {
+  // Estado
+  gnres: GNRE[];
+  filters: GNREFilters;
+  selectedGNREs: string[];
+  bulkOperations: {
+    isActive: boolean;
+    operation: 'download' | 'cancel' | 'retry' | null;
+    progress: number;
+  };
+
+  // Ações
+  setGNREs: (gnres: GNRE[]) => void;
+  updateGNRE: (id: string, updates: Partial<GNRE>) => void;
+  setFilters: (filters: Partial<GNREFilters>) => void;
+  toggleGNRESelection: (id: string) => void;
+  selectAllGNREs: () => void;
+  clearSelection: () => void;
+  startBulkOperation: (operation: 'download' | 'cancel' | 'retry') => void;
+  updateBulkProgress: (progress: number) => void;
+  completeBulkOperation: () => void;
+}
+
+export const useGNREStore = create<GNREState>()(
+  devtools(
+    persist(
+      subscribeWithSelector(
+        immer((set, get) => ({
+          // Estado inicial
+          gnres: [],
+          filters: {
+            status: [],
+            dateRange: { start: null, end: null },
+            searchTerm: '',
+            uf: []
+          },
+          selectedGNREs: [],
+          bulkOperations: {
+            isActive: false,
+            operation: null,
+            progress: 0
+          },
+
+          // Ações
+          setGNREs: (gnres) => set((state) => {
+            state.gnres = gnres;
+          }),
+
+          updateGNRE: (id, updates) => set((state) => {
+            const index = state.gnres.findIndex(g => g.id === id);
+            if (index !== -1) {
+              Object.assign(state.gnres[index], updates);
+            }
+          }),
+
+          setFilters: (filters) => set((state) => {
+            Object.assign(state.filters, filters);
+          }),
+
+          toggleGNRESelection: (id) => set((state) => {
+            const index = state.selectedGNREs.indexOf(id);
+            if (index === -1) {
+              state.selectedGNREs.push(id);
+            } else {
+              state.selectedGNREs.splice(index, 1);
+            }
+          }),
+
+          selectAllGNREs: () => set((state) => {
+            state.selectedGNREs = state.gnres.map(g => g.id);
+          }),
+
+          clearSelection: () => set((state) => {
+            state.selectedGNREs = [];
+          }),
+
+          startBulkOperation: (operation) => set((state) => {
+            state.bulkOperations.isActive = true;
+            state.bulkOperations.operation = operation;
+            state.bulkOperations.progress = 0;
+          }),
+
+          updateBulkProgress: (progress) => set((state) => {
+            state.bulkOperations.progress = progress;
+          }),
+
+          completeBulkOperation: () => set((state) => {
+            state.bulkOperations.isActive = false;
+            state.bulkOperations.operation = null;
+            state.bulkOperations.progress = 0;
+            state.selectedGNREs = [];
+          })
+        }))
+      ),
+      {
+        name: 'gnre-store',
+        partialize: (state) => ({
+          filters: state.filters
+        })
+      }
+    ),
+    { name: 'GNRE Store' }
+  )
+);
+
+// Seletores otimizados
+export const useFilteredGNREs = () => {
+  return useGNREStore(
+    useCallback((state) => {
+      let filtered = state.gnres;
+
+      // Filtro por status
+      if (state.filters.status.length > 0) {
+        filtered = filtered.filter(g => state.filters.status.includes(g.status));
+      }
+
+      // Filtro por termo de busca
+      if (state.filters.searchTerm) {
+        const term = state.filters.searchTerm.toLowerCase();
+        filtered = filtered.filter(g =>
+          g.client_name.toLowerCase().includes(term) ||
+          g.protocol_number?.toLowerCase().includes(term)
+        );
+      }
+
+      // Filtro por data
+      if (state.filters.dateRange.start && state.filters.dateRange.end) {
+        filtered = filtered.filter(g => {
+          const date = new Date(g.created_at);
+          return date >= state.filters.dateRange.start! &&
+                 date <= state.filters.dateRange.end!;
+        });
+      }
+
+      return filtered;
+    }, [])
+  );
+};
+```
+
+### 9.3. Progressive Web App (PWA) Completo
+```typescript
+// src/lib/pwa.ts
+interface PWAConfig {
+  enableNotifications: boolean;
+  enableOfflineMode: boolean;
+  enableBackgroundSync: boolean;
+}
+
+class PWAManager {
+  private swRegistration: ServiceWorkerRegistration | null = null;
+
+  async initialize(config: PWAConfig) {
+    if ('serviceWorker' in navigator) {
+      try {
+        this.swRegistration = await navigator.serviceWorker.register('/sw.js');
+        console.log('SW registered:', this.swRegistration);
+
+        if (config.enableNotifications) {
+          await this.setupNotifications();
+        }
+
+        if (config.enableBackgroundSync) {
+          await this.setupBackgroundSync();
+        }
+
+      } catch (error) {
+        console.error('SW registration failed:', error);
+      }
+    }
+  }
+
+  async setupNotifications() {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        // Configurar push notifications
+        const subscription = await this.swRegistration?.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_KEY
+        });
+
+        // Enviar subscription para o backend
+        if (subscription) {
+          await fetch('/api/notifications/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subscription)
+          });
+        }
+      }
+    }
+  }
+
+  async setupBackgroundSync() {
+    if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+      // Registrar background sync para upload de arquivos
+      await this.swRegistration?.sync.register('background-upload');
+    }
+  }
+
+  async showNotification(title: string, options: NotificationOptions) {
+    if (this.swRegistration) {
+      await this.swRegistration.showNotification(title, {
+        ...options,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/badge-72x72.png'
+      });
+    }
+  }
+}
+
+// Hook para PWA
+export function usePWA() {
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const installApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+
+      if (outcome === 'accepted') {
+        setIsInstallable(false);
+        setDeferredPrompt(null);
+      }
+    }
+  };
+
+  return { isInstallable, installApp };
+}
+
+// public/sw.js - Service Worker
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('gnre-v1').then((cache) => {
+      return cache.addAll([
+        '/',
+        '/dashboard',
+        '/gnre',
+        '/offline.html',
+        '/icons/icon-192x192.png'
+      ]);
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  // Estratégia cache-first para assets estáticos
+  if (event.request.destination === 'image' ||
+      event.request.destination === 'script' ||
+      event.request.destination === 'style') {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        return response || fetch(event.request);
+      })
+    );
+  }
+
+  // Estratégia network-first para API calls
+  if (event.request.url.includes('/api/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return new Response(JSON.stringify({
+          error: 'Offline mode',
+          message: 'Você está offline. Tente novamente quando a conexão for restabelecida.'
+        }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 503
+        });
+      })
+    );
+  }
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'background-upload') {
+    event.waitUntil(processBackgroundUploads());
+  }
+});
+
+async function processBackgroundUploads() {
+  // Processar uploads pendentes quando a conexão for restabelecida
+  const pendingUploads = await getStoredUploads();
+
+  for (const upload of pendingUploads) {
+    try {
+      await fetch('/api/gnre/upload', {
+        method: 'POST',
+        body: upload.data
+      });
+      await removeStoredUpload(upload.id);
+    } catch (error) {
+      console.error('Background upload failed:', error);
+    }
+  }
+}
+```
+
+### 9.4. Acessibilidade Avançada (WCAG 2.1 AAA)
+```typescript
+// src/hooks/useAccessibility.ts
+export function useAccessibility() {
+  const [highContrast, setHighContrast] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [fontSize, setFontSize] = useState('medium');
+
+  useEffect(() => {
+    // Detectar preferências do sistema
+    const highContrastQuery = window.matchMedia('(prefers-contrast: high)');
+    const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    setHighContrast(highContrastQuery.matches);
+    setReducedMotion(reducedMotionQuery.matches);
+
+    // Listeners para mudanças
+    const handleContrastChange = (e: MediaQueryListEvent) => setHighContrast(e.matches);
+    const handleMotionChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+
+    highContrastQuery.addEventListener('change', handleContrastChange);
+    reducedMotionQuery.addEventListener('change', handleMotionChange);
+
+    return () => {
+      highContrastQuery.removeEventListener('change', handleContrastChange);
+      reducedMotionQuery.removeEventListener('change', handleMotionChange);
+    };
+  }, []);
+
+  const announceToScreenReader = useCallback((message: string) => {
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'polite');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.className = 'sr-only';
+    announcement.textContent = message;
+
+    document.body.appendChild(announcement);
+
+    setTimeout(() => {
+      document.body.removeChild(announcement);
+    }, 1000);
+  }, []);
+
+  return {
+    highContrast,
+    reducedMotion,
+    fontSize,
+    setFontSize,
+    announceToScreenReader
+  };
+}
+
+// Componente de Skip Links
+export function SkipLinks() {
+  return (
+    <div className="skip-links">
+      <a href="#main-content" className="skip-link">
+        Pular para o conteúdo principal
+      </a>
+      <a href="#navigation" className="skip-link">
+        Pular para a navegação
+      </a>
+      <a href="#search" className="skip-link">
+        Pular para a busca
+      </a>
+    </div>
+  );
+}
+
+// Hook para navegação por teclado
+export function useKeyboardNavigation() {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Esc para fechar modais
+      if (event.key === 'Escape') {
+        const openModal = document.querySelector('[role="dialog"][aria-hidden="false"]');
+        if (openModal) {
+          const closeButton = openModal.querySelector('[data-close-modal]') as HTMLElement;
+          closeButton?.click();
+        }
+      }
+
+      // Ctrl+/ para abrir busca
+      if (event.ctrlKey && event.key === '/') {
+        event.preventDefault();
+        const searchInput = document.querySelector('#search-input') as HTMLInputElement;
+        searchInput?.focus();
+      }
+
+      // Alt+M para abrir menu principal
+      if (event.altKey && event.key === 'm') {
+        event.preventDefault();
+        const mainMenu = document.querySelector('#main-menu button') as HTMLElement;
+        mainMenu?.click();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+}
+```
+
 ---
 
 *Este documento é atualizado com cada release do frontend e revisado pela equipe de desenvolvimento.*

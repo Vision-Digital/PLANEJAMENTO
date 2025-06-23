@@ -629,6 +629,329 @@ async def list_gnres_v2():
     pass
 ```
 
+## 🚀 Melhorias Avançadas de Performance
+
+### 10.1. Connection Pooling Otimizado
+```python
+# src/core/database_pool.py
+from sqlalchemy.pool import QueuePool
+from sqlalchemy.ext.asyncio import create_async_engine
+
+class OptimizedDatabasePool:
+    def __init__(self):
+        self.engine = create_async_engine(
+            DATABASE_URL,
+            poolclass=QueuePool,
+            pool_size=20,              # Conexões ativas
+            max_overflow=30,           # Conexões extras
+            pool_pre_ping=True,        # Verificar conexões
+            pool_recycle=3600,         # Reciclar após 1h
+            echo=False,
+            connect_args={
+                "server_settings": {
+                    "application_name": "gnre_backend",
+                    "jit": "off"           # Otimização para queries simples
+                }
+            }
+        )
+
+    async def get_connection_stats(self):
+        pool = self.engine.pool
+        return {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "invalid": pool.invalid()
+        }
+```
+
+### 10.2. Cache Inteligente Multi-Layer
+```python
+# src/core/cache_manager.py
+from typing import Optional, Any, Union
+import redis.asyncio as redis
+import pickle
+import hashlib
+from functools import wraps
+
+class MultiLayerCache:
+    def __init__(self):
+        self.redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        self.local_cache = {}  # Cache em memória para dados frequentes
+        self.local_cache_size = 1000
+
+    async def get(self, key: str, use_local: bool = True) -> Optional[Any]:
+        # 1. Tentar cache local primeiro
+        if use_local and key in self.local_cache:
+            return self.local_cache[key]
+
+        # 2. Tentar Redis
+        redis_value = await self.redis_client.get(key)
+        if redis_value:
+            value = pickle.loads(redis_value)
+            # Promover para cache local se frequente
+            if use_local:
+                self._add_to_local_cache(key, value)
+            return value
+
+        return None
+
+    async def set(self, key: str, value: Any, ttl: int = 3600, use_local: bool = True):
+        # Salvar no Redis
+        await self.redis_client.setex(key, ttl, pickle.dumps(value))
+
+        # Salvar no cache local se apropriado
+        if use_local and self._should_cache_locally(key, value):
+            self._add_to_local_cache(key, value)
+
+    def cache_result(self, ttl: int = 3600, key_prefix: str = ""):
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                # Gerar chave baseada na função e argumentos
+                cache_key = f"{key_prefix}:{func.__name__}:{self._hash_args(args, kwargs)}"
+
+                # Tentar cache
+                result = await self.get(cache_key)
+                if result is not None:
+                    return result
+
+                # Executar função e cachear resultado
+                result = await func(*args, **kwargs)
+                await self.set(cache_key, result, ttl)
+                return result
+            return wrapper
+        return decorator
+
+# Uso nos serviços
+@cache_manager.cache_result(ttl=1800, key_prefix="gnre_calc")
+async def calculate_gnre_values(uf_origem: str, uf_destino: str, valor: Decimal):
+    # Cálculo pesado que pode ser cacheado
+    return complex_calculation_result
+```
+
+### 10.3. Rate Limiting Avançado
+```python
+# src/middleware/rate_limiting.py
+from fastapi import Request, HTTPException
+from typing import Dict, Optional
+import time
+import redis.asyncio as redis
+
+class AdvancedRateLimiter:
+    def __init__(self):
+        self.redis = redis.Redis(host='localhost', port=6379, db=1)
+
+    async def check_rate_limit(
+        self,
+        request: Request,
+        identifier: str,
+        limits: Dict[str, int]  # {"1m": 60, "1h": 1000, "1d": 10000}
+    ) -> bool:
+        current_time = int(time.time())
+
+        for window, limit in limits.items():
+            window_seconds = self._parse_window(window)
+            window_start = current_time - (current_time % window_seconds)
+
+            key = f"rate_limit:{identifier}:{window}:{window_start}"
+
+            # Incrementar contador
+            current_count = await self.redis.incr(key)
+
+            # Definir TTL na primeira vez
+            if current_count == 1:
+                await self.redis.expire(key, window_seconds)
+
+            # Verificar limite
+            if current_count > limit:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded: {current_count}/{limit} requests per {window}",
+                    headers={
+                        "X-RateLimit-Limit": str(limit),
+                        "X-RateLimit-Remaining": str(max(0, limit - current_count)),
+                        "X-RateLimit-Reset": str(window_start + window_seconds)
+                    }
+                )
+
+        return True
+
+# Middleware personalizado por endpoint
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Rate limiting diferenciado por endpoint
+    endpoint_limits = {
+        "/api/v1/gnre/generate": {"1m": 10, "1h": 100},
+        "/api/v1/gnre/from-local-agent": {"1m": 30, "1h": 500},
+        "/api/v1/auth/login": {"1m": 5, "1h": 20}
+    }
+
+    path = request.url.path
+    if path in endpoint_limits:
+        user_id = getattr(request.state, 'user_id', request.client.host)
+        await rate_limiter.check_rate_limit(request, user_id, endpoint_limits[path])
+
+    response = await call_next(request)
+    return response
+```
+
+## 🔒 Segurança Avançada
+
+### 11.1. WAF (Web Application Firewall) Integrado
+```python
+# src/security/waf.py
+from fastapi import Request, HTTPException
+import re
+from typing import List, Pattern
+
+class IntegratedWAF:
+    def __init__(self):
+        self.sql_injection_patterns = [
+            re.compile(r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b)", re.IGNORECASE),
+            re.compile(r"(\b(UNION|OR|AND)\s+\d+\s*=\s*\d+)", re.IGNORECASE),
+            re.compile(r"('|\"|;|--|\*|\/\*|\*\/)", re.IGNORECASE)
+        ]
+
+        self.xss_patterns = [
+            re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL),
+            re.compile(r"javascript:", re.IGNORECASE),
+            re.compile(r"on\w+\s*=", re.IGNORECASE)
+        ]
+
+        self.path_traversal_patterns = [
+            re.compile(r"\.\./"),
+            re.compile(r"\.\.\\"),
+            re.compile(r"%2e%2e%2f", re.IGNORECASE),
+            re.compile(r"%2e%2e%5c", re.IGNORECASE)
+        ]
+
+    async def analyze_request(self, request: Request) -> bool:
+        # Analisar URL
+        if self._check_patterns(str(request.url), self.path_traversal_patterns):
+            raise HTTPException(status_code=400, detail="Path traversal attempt detected")
+
+        # Analisar query parameters
+        for key, value in request.query_params.items():
+            if self._check_patterns(value, self.sql_injection_patterns):
+                raise HTTPException(status_code=400, detail="SQL injection attempt detected")
+            if self._check_patterns(value, self.xss_patterns):
+                raise HTTPException(status_code=400, detail="XSS attempt detected")
+
+        # Analisar headers suspeitos
+        suspicious_headers = ['x-forwarded-for', 'x-real-ip', 'user-agent']
+        for header in suspicious_headers:
+            value = request.headers.get(header, "")
+            if self._check_patterns(value, self.sql_injection_patterns + self.xss_patterns):
+                raise HTTPException(status_code=400, detail="Malicious header detected")
+
+        return True
+
+    def _check_patterns(self, text: str, patterns: List[Pattern]) -> bool:
+        return any(pattern.search(text) for pattern in patterns)
+```
+
+### 11.2. Audit Trail Completo
+```python
+# src/core/audit.py
+from sqlalchemy import Column, String, DateTime, JSON, Text
+from sqlalchemy.ext.declarative import declarative_base
+from enum import Enum
+import json
+
+class AuditAction(Enum):
+    CREATE = "CREATE"
+    READ = "READ"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    EXPORT = "EXPORT"
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, nullable=False)
+    company_id = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    resource_type = Column(String, nullable=False)
+    resource_id = Column(String, nullable=True)
+    old_values = Column(JSON, nullable=True)
+    new_values = Column(JSON, nullable=True)
+    ip_address = Column(String, nullable=False)
+    user_agent = Column(Text, nullable=True)
+    timestamp = Column(DateTime, nullable=False)
+    correlation_id = Column(String, nullable=True)
+
+class AuditService:
+    def __init__(self, db_session):
+        self.db = db_session
+
+    async def log_action(
+        self,
+        user_id: str,
+        company_id: str,
+        action: AuditAction,
+        resource_type: str,
+        resource_id: str = None,
+        old_values: dict = None,
+        new_values: dict = None,
+        request: Request = None
+    ):
+        audit_log = AuditLog(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            company_id=company_id,
+            action=action.value,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            old_values=old_values,
+            new_values=new_values,
+            ip_address=request.client.host if request else "system",
+            user_agent=request.headers.get("user-agent") if request else "system",
+            timestamp=datetime.utcnow(),
+            correlation_id=request.headers.get("x-correlation-id") if request else None
+        )
+
+        self.db.add(audit_log)
+        await self.db.commit()
+
+# Decorator para auditoria automática
+def audit_action(action: AuditAction, resource_type: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extrair informações do contexto
+            request = kwargs.get('request')
+            user = kwargs.get('current_user')
+
+            # Executar função
+            result = await func(*args, **kwargs)
+
+            # Log da auditoria
+            if user and request:
+                await audit_service.log_action(
+                    user_id=user.id,
+                    company_id=user.company_id,
+                    action=action,
+                    resource_type=resource_type,
+                    resource_id=getattr(result, 'id', None),
+                    request=request
+                )
+
+            return result
+        return wrapper
+    return decorator
+
+# Uso
+@audit_action(AuditAction.CREATE, "GNRE")
+async def create_gnre(gnre_data: GNRECreate, current_user: User, request: Request):
+    # Lógica de criação
+    return created_gnre
+```
+
 ---
 
 *Este documento é atualizado com cada release do backend e revisado pela equipe de desenvolvimento.*
