@@ -12,9 +12,117 @@
 | 6-7 | Infraestrutura + Segurança | 2 semanas | Paralelo 4-5 | Ambiente Produção |
 | 8 | Testes | 2 semanas | Fase 4-5 | Qualidade Validada |
 | 9-10 | Validação + Observabilidade | 1 semana | Fase 8 | Produto Pronto |
-| 11 | Deploy Final | 1 semana | Todas | Go-Live |
+| 11 | Governança e Qualidade | 1 semana | Paralelo 4-8 | Processos Implementados |
+| 12 | Deploy Final | 1 semana | Todas | Go-Live |
 
 **Total Estimado: 20-24 semanas**
+
+## 📊 Cronograma Visual do Projeto
+
+```mermaid
+gantt
+    title Cronograma do Projeto GNRE
+    dateFormat  YYYY-MM-DD
+    section Validação
+    Pesquisa de Mercado     :active, market, 2024-01-01, 2w
+    Análise Concorrentes    :competitor, after market, 1w
+    Validação MVP           :mvp, after competitor, 1w
+
+    section Planejamento
+    Discovery Master        :discovery, after mvp, 1w
+    Arquitetura Software    :arch, after discovery, 2w
+    UX/UI Design           :design, after arch, 3w
+
+    section Desenvolvimento
+    Setup Infraestrutura   :infra, after arch, 1w
+    Backend Development    :backend, after design, 6w
+    Frontend Development   :frontend, after design, 6w
+    App Local Development  :local, after design, 4w
+
+    section Qualidade
+    Testes Unitários       :unit, after backend, 2w
+    Testes Integração      :integration, after unit, 2w
+    Testes E2E             :e2e, after integration, 1w
+    Testes Segurança       :security, after e2e, 1w
+
+    section Deploy
+    Ambiente Staging       :staging, after security, 1w
+    Testes Produção        :prod-test, after staging, 1w
+    Go Live                :golive, after prod-test, 1w
+
+    section Pós-Launch
+    Monitoramento          :monitor, after golive, 2w
+    Feedback Usuários      :feedback, after golive, 4w
+    Iterações              :iterate, after feedback, 4w
+```
+
+## 🏗️ Arquitetura do Sistema
+
+```mermaid
+graph TB
+    %% Usuários
+    U1[👤 Contador] --> WEB[🌐 Frontend Web]
+    U2[👤 Empresário] --> WEB
+    U3[👤 Assistente Fiscal] --> LOCAL[💻 App Local]
+
+    %% Frontend
+    WEB --> LB[⚖️ Load Balancer]
+    LOCAL --> LB
+
+    %% Backend Services
+    LB --> API[🚀 FastAPI Backend]
+    API --> AUTH[🔐 Auth Service]
+    API --> GNRE[📄 GNRE Service]
+    API --> FILE[📁 File Service]
+    API --> PAY[💳 Payment Service]
+
+    %% Databases
+    API --> DB[(🗄️ PostgreSQL<br/>Supabase)]
+    API --> REDIS[(⚡ Redis<br/>Cache & Queues)]
+
+    %% Storage
+    FILE --> MINIO[🗃️ MinIO<br/>Object Storage]
+
+    %% External Services
+    GNRE --> SEFAZ[🏛️ SEFAZ<br/>Webservices]
+    PAY --> STRIPE[💰 Stripe/Pagar.me]
+    API --> EMAIL[📧 Email Service]
+
+    %% Processing
+    REDIS --> WORKER1[⚙️ XML Worker]
+    REDIS --> WORKER2[⚙️ GNRE Worker]
+    REDIS --> WORKER3[⚙️ PDF Worker]
+    REDIS --> WORKER4[⚙️ Email Worker]
+
+    %% Monitoring
+    API --> LOGS[📊 Logging<br/>ELK Stack]
+    API --> METRICS[📈 Metrics<br/>Prometheus]
+    LOGS --> GRAFANA[📊 Grafana<br/>Dashboard]
+    METRICS --> GRAFANA
+
+    %% Security
+    AUTH --> KMS[🔑 KMS<br/>Key Management]
+    FILE --> CERT[🔒 Certificate<br/>Storage]
+
+    %% Styling
+    classDef user fill:#e1f5fe
+    classDef frontend fill:#f3e5f5
+    classDef backend fill:#e8f5e8
+    classDef database fill:#fff3e0
+    classDef external fill:#ffebee
+    classDef worker fill:#f1f8e9
+    classDef monitoring fill:#e0f2f1
+    classDef security fill:#fce4ec
+
+    class U1,U2,U3 user
+    class WEB,LOCAL frontend
+    class LB,API,AUTH,GNRE,FILE,PAY backend
+    class DB,REDIS,MINIO database
+    class SEFAZ,STRIPE,EMAIL external
+    class WORKER1,WORKER2,WORKER3,WORKER4 worker
+    class LOGS,METRICS,GRAFANA monitoring
+    class KMS,CERT security
+```
 
 ## 0. Agente 0 – Validação de Mercado e Produto
 
@@ -625,37 +733,102 @@ graph TD
 
 **Artefato de Saída:** Configurações de monitoramento, dashboards, alertas.
 
-## 11. Agente Final (ou Processo Final): Consolidar Tudo e Gerar Código Completo
+## 11. Agente 11 – Governança e Qualidade de Processo
+
+**Objetivo:** Implementar governança de desenvolvimento, Definition of Done e backlog centralizado para garantir qualidade e consistência.
+
+**Task List / To-Do:**
+
+*   **11.1. Definition of Done (DoD) por Agente:**
+    *   [ ] **UX/UI Designer DoD:**
+        *   [ ] Design aprovado em reunião com stakeholders
+        *   [ ] Protótipo interativo testado com 3+ usuários
+        *   [ ] Componentes documentados no Storybook
+        *   [ ] Especificações técnicas validadas com dev team
+        *   [ ] Acessibilidade (WCAG 2.1 AA) verificada
+        *   [ ] Design system atualizado
+        *   [ ] Handoff completo para desenvolvimento
+    *   [ ] **Backend Developer DoD:**
+        *   [ ] Código revisado por 2+ desenvolvedores
+        *   [ ] Testes unitários com cobertura > 80%
+        *   [ ] Testes de integração implementados
+        *   [ ] Documentação OpenAPI atualizada
+        *   [ ] Security scan sem vulnerabilidades críticas
+        *   [ ] Performance benchmarks validados
+        *   [ ] Logs estruturados implementados
+    *   [ ] **Frontend Developer DoD:**
+        *   [ ] Componentes testados com React Testing Library
+        *   [ ] Storybook atualizado com novos componentes
+        *   [ ] Acessibilidade validada (axe-core)
+        *   [ ] Performance (Lighthouse) > 90
+        *   [ ] Bundle size otimizado
+        *   [ ] Cross-browser testing realizado
+
+*   **11.2. Backlog Centralizado e Priorização:**
+    *   [ ] Configurar ferramenta de gestão (Jira/Azure DevOps/Linear)
+    *   [ ] Estruturar hierarquia: Epic → Story → Task → Bug
+    *   [ ] Implementar labels por prioridade (P0-P4) e tipo
+    *   [ ] Configurar automações (PR → Task, Deploy → Story)
+    *   [ ] Definir critérios de priorização (RICE framework)
+
+*   **11.3. Code Review e Quality Gates:**
+    *   [ ] **Configurar Pre-commit Hooks:**
+        *   [ ] ESLint + Prettier (Frontend)
+        *   [ ] Black + isort + mypy (Backend)
+        *   [ ] gofmt + golint (Aplicação Local)
+        *   [ ] Conventional Commits validation
+    *   [ ] **CI/CD Quality Gates:**
+        *   [ ] Code coverage > 80%
+        *   [ ] Security scan (SAST/DAST)
+        *   [ ] Performance regression tests
+        *   [ ] Dependency vulnerability scan
+        *   [ ] License compliance check
+
+*   **11.4. Observabilidade e Resiliência:**
+    *   [ ] Implementar Distributed Tracing (OpenTelemetry)
+    *   [ ] Configurar Circuit Breakers para integrações externas
+    *   [ ] Implementar Retry policies com backoff exponencial
+    *   [ ] Configurar Health Checks e Readiness Probes
+    *   [ ] Implementar métricas de negócio e técnicas
+
+**Artefato de Saída:** Governança implementada + Quality Gates + Observabilidade configurada.
+
+## 12. Agente Final (ou Processo Final): Consolidar Tudo e Gerar Código Completo
 
 **Objetivo:** Juntar todo o conhecimento produzido pelos agentes anteriores e gerar o código completo final, pronto para deploy.
 
 **Task List / To-Do:**
 
-*   **11.1. Receber Toda a Documentação/Informações:**
+*   **12.1. Receber Toda a Documentação/Informações:**
     *   [ ] Coletar todos os artefatos gerados pelos agentes anteriores (documentos de requisitos, arquitetura, UX/UI, código fonte, testes, configurações de infra/segurança/observabilidade).
     *   [ ] Garantir que todas as informações estejam registradas em um repositório central (Git Repo, Wiki, etc.).
 
-*   **11.2. Concatenar Todas as Etapas:**
+*   **12.2. Concatenar Todas as Etapas:**
     *   [ ] Realizar a integração final do código Frontend, Backend e Aplicação Local.
     *   [ ] Resolver quaisquer dependências ou conflitos de integração.
     *   [ ] Garantir que as rotas do Frontend estejam corretamente conectadas aos endpoints do Backend.
     *   [ ] Verificar a implementação do design system (UI/UX) no Frontend.
     *   [ ] Validar a funcionalidade das filas, cache e integrações externas.
 
-*   **11.3. Verificar Consistência e Coerência:**
+*   **12.3. Verificar Consistência e Coerência:**
     *   [ ] Realizar uma revisão final de arquitetura e código para garantir consistência e aderência aos padrões.
     *   [ ] Executar todos os testes (unitários, integração, e2e, segurança) para garantir a qualidade e estabilidade.
     *   [ ] Validar a conformidade com os requisitos de segurança e compliance.
+    *   [ ] Verificar se todos os Definition of Done foram atendidos.
 
-*   **11.4. Gerar “Build” Final:**
+*   **12.4. Gerar “Build” Final:**
     *   [ ] Executar o pipeline de CI/CD para gerar os artefatos de build otimizados para produção (imagens Docker, bundles Frontend, binário Aplicação Local).
     *   [ ] Garantir que o processo de build seja reproduzível e automatizado.
+    *   [ ] Validar que todos os quality gates foram aprovados.
 
-*   **11.5. Deploy em Produção:**
+*   **12.5. Deploy em Produção:**
     *   [ ] Utilizar a infraestrutura definida (Vercel, AWS, Docker Compose, Kubernetes) para realizar o deploy da aplicação.
     *   [ ] Configurar balanceadores de carga, firewalls, e outras medidas de segurança de rede.
     *   [ ] Realizar testes pós-deploy para validar a funcionalidade em produção.
+    *   [ ] Ativar monitoramento e alertas em produção.
 
-*   **11.6. Entrega:**
+*   **12.6. Entrega:**
     *   [ ] **Saída:** Código completo e final, documentação abrangente e aplicação rodando em produção.
     *   [ ] Garantir que todo o histórico de versão e documentação esteja registrado para manutenção e evolução contínua.
+    *   [ ] Transferir conhecimento para equipe de suporte e manutenção.
+    *   [ ] Documentar runbooks e procedimentos operacionais.
