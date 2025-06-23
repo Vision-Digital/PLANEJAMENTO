@@ -252,15 +252,548 @@ graph TD
     *   **Sua escolha (`FRONT.md`):** React 18.3.1, TypeScript 5.5.3, Vite 6.3.5, Context API, Tailwind CSS, Tremor React.
     *   **Outras sugestões:** Next.js 14+, Shadcn/ui, Zustand, Tanstack Query (`Claude`, `GEMINI`, `OpenAI`).
     *   **Justificativa:** A base do seu `FRONT.md` é **excelente e moderna**. A sugestão de incorporar `Next.js` é para aproveitar recursos como `SSR/SSG` (melhor SEO para páginas públicas, carregamento inicial mais rápido), `App Router` (melhor organização de rotas e data fetching) e `CSP headers` automáticos, que são cruciais para segurança e performance em aplicações corporativas. `Shadcn UI` é uma biblioteca de componentes headless que se integra perfeitamente com `Tailwind CSS` e oferece alta customização, sendo uma alternativa robusta ao `Tremor React` para componentes mais genéricos, enquanto `Tremor` pode ser mantido para dashboards específicos. `Zustand` é uma biblioteca de gerenciamento de estado leve e performática, uma boa evolução da `Context API` para estados mais complexos. `Tanstack Query` é um padrão de mercado para data fetching e cache. A recomendação é **integrar esses elementos** para elevar o nível do frontend, mantendo a base sólida que você já definiu.
-## Oportunidades de Aprimoramento (Frontend)
+## 🎨 Governança do Design System
 
-*   **Tratamento de Erros da API:** Detalhar como os erros retornados pelo Backend serão padronizados e apresentados ao usuário de forma amigável (ex: uso de `Toast` para mensagens de erro, modais para erros críticos).
-*   **Estratégia de Cache e Revalidação:** Embora `TanStack Query` seja mencionado, especificar as estratégias de cache (stale-while-revalidate), revalidação de dados (on-focus, on-mount, interval) e como isso impacta a experiência do usuário.
-*   **Componentização e Design System:** Adicionar uma seção sobre a governança do design system. Como garantir que os desenvolvedores sigam as diretrizes? Haverá um Storybook ou ferramenta similar para documentação interativa dos componentes?
-*   **Otimização de Ativos:** Além de imagens, mencionar otimização de fontes (font-display), uso de `CDN` para assets estáticos e estratégias de pré-carregamento de rotas/dados.
-*   **Testes de Frontend:** Referenciar mais explicitamente os tipos de testes (unitários de componentes com `React Testing Library`, integração de fluxos com `Cypress`/`Playwright`) e a expectativa de cobertura.
-*   **Observabilidade Unificada:** Detalhar como o Frontend contribuirá para o sistema de observabilidade (ex: logs estruturados com `correlation IDs`, métricas específicas, instrumentação para `distributed tracing` com OpenTelemetry).
-*   **CI/CD por Componente:** Mencionar como o pipeline de CI/CD se aplica ao Frontend (testes automatizados, builds, deploys específicos).
-*   **Gerenciamento de Configurações e Segredos:** Detalhar a estratégia para gerenciar variáveis de ambiente e segredos em diferentes ambientes (desenvolvimento, homologação, produção) de forma segura (ex: `.env` para dev, Vault/KMS para produção).
-*   **Controle de Versão e Branching:** Reforçar o uso de Git e uma estratégia de branching clara (ex: GitFlow, Trunk-Based Development com feature flags) para gerenciar o desenvolvimento em paralelo.
-*   **Monitoramento de Custos:** Adicionar uma nota sobre o monitoramento contínuo de custos dos serviços (Vercel, CDN, etc.) para otimização.
+### 5.1. Storybook Implementation
+```javascript
+// .storybook/main.js
+module.exports = {
+  stories: ['../src/**/*.stories.@(js|jsx|ts|tsx)'],
+  addons: [
+    '@storybook/addon-essentials',
+    '@storybook/addon-a11y',
+    '@storybook/addon-design-tokens',
+    '@storybook/addon-docs',
+    '@storybook/addon-controls'
+  ],
+  framework: {
+    name: '@storybook/nextjs',
+    options: {}
+  }
+};
+
+// src/components/GNREStatusBadge/GNREStatusBadge.stories.tsx
+import type { Meta, StoryObj } from '@storybook/react';
+import { GNREStatusBadge } from './GNREStatusBadge';
+
+const meta: Meta<typeof GNREStatusBadge> = {
+  title: 'Components/GNREStatusBadge',
+  component: GNREStatusBadge,
+  parameters: {
+    docs: {
+      description: {
+        component: 'Badge para exibir status das GNREs com cores semânticas'
+      }
+    }
+  },
+  argTypes: {
+    status: {
+      control: { type: 'select' },
+      options: ['PENDENTE', 'PROCESSANDO', 'GERADO', 'PAGO', 'CANCELADO', 'ERRO'],
+      description: 'Status atual da GNRE'
+    },
+    size: {
+      control: { type: 'select' },
+      options: ['sm', 'md', 'lg'],
+      description: 'Tamanho do badge'
+    }
+  }
+};
+
+export default meta;
+type Story = StoryObj<typeof GNREStatusBadge>;
+
+export const Default: Story = {
+  args: {
+    status: 'PENDENTE',
+    size: 'md'
+  }
+};
+
+export const AllStatuses: Story = {
+  render: () => (
+    <div className="flex gap-2 flex-wrap">
+      {['PENDENTE', 'PROCESSANDO', 'GERADO', 'PAGO', 'CANCELADO', 'ERRO'].map(status => (
+        <GNREStatusBadge key={status} status={status} size="md" />
+      ))}
+    </div>
+  )
+};
+```
+
+### 5.2. Design Tokens
+```typescript
+// src/design-system/tokens.ts
+export const designTokens = {
+  colors: {
+    primary: {
+      50: '#eff6ff',
+      500: '#3b82f6',
+      900: '#1e3a8a'
+    },
+    status: {
+      pending: '#f59e0b',
+      processing: '#3b82f6',
+      generated: '#10b981',
+      paid: '#059669',
+      cancelled: '#6b7280',
+      error: '#ef4444'
+    }
+  },
+  spacing: {
+    xs: '0.25rem',
+    sm: '0.5rem',
+    md: '1rem',
+    lg: '1.5rem',
+    xl: '2rem'
+  },
+  typography: {
+    fontFamily: {
+      sans: ['Inter', 'system-ui', 'sans-serif'],
+      mono: ['JetBrains Mono', 'monospace']
+    },
+    fontSize: {
+      xs: ['0.75rem', { lineHeight: '1rem' }],
+      sm: ['0.875rem', { lineHeight: '1.25rem' }],
+      base: ['1rem', { lineHeight: '1.5rem' }],
+      lg: ['1.125rem', { lineHeight: '1.75rem' }]
+    }
+  }
+} as const;
+```
+
+## 🚀 Estratégia de Cache e Performance
+
+### 6.1. TanStack Query Configuration
+```typescript
+// src/lib/query-client.ts
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      cacheTime: 10 * 60 * 1000, // 10 minutos
+      retry: (failureCount, error) => {
+        // Não retry em erros 4xx
+        if (error?.status >= 400 && error?.status < 500) {
+          return false;
+        }
+        return failureCount < 3;
+      },
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true
+    },
+    mutations: {
+      retry: 1
+    }
+  }
+});
+
+// src/hooks/useGNREs.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { gnreApi } from '@/services/api';
+
+export function useGNREs(filters?: GNREFilters) {
+  return useQuery({
+    queryKey: ['gnres', filters],
+    queryFn: () => gnreApi.list(filters),
+    staleTime: 2 * 60 * 1000, // 2 minutos para dados dinâmicos
+    select: (data) => ({
+      ...data,
+      items: data.items.map(gnre => ({
+        ...gnre,
+        formattedAmount: new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(gnre.amount)
+      }))
+    })
+  });
+}
+
+export function useCreateGNRE() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: gnreApi.create,
+    onSuccess: () => {
+      // Invalidar cache de listagem
+      queryClient.invalidateQueries({ queryKey: ['gnres'] });
+      // Invalidar dashboard stats
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
+    },
+    onError: (error) => {
+      // Log error para observabilidade
+      console.error('Failed to create GNRE:', error);
+    }
+  });
+}
+```
+
+### 6.2. Otimização de Assets
+```typescript
+// next.config.js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ['@tremor/react', 'lucide-react']
+  },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384]
+  },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production'
+  },
+  async headers() {
+    return [
+      {
+        source: '/fonts/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable'
+          }
+        ]
+      }
+    ];
+  }
+};
+
+module.exports = nextConfig;
+
+// src/app/layout.tsx
+import { Inter } from 'next/font/google';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter'
+});
+
+export default function RootLayout({
+  children
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="pt-BR" className={inter.variable}>
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/inter-var.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
+      <body className="font-sans antialiased">
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+## 🧪 Estratégia de Testes Avançada
+
+### 7.1. Configuração de Testes
+```typescript
+// jest.config.js
+const nextJest = require('next/jest');
+
+const createJestConfig = nextJest({
+  dir: './'
+});
+
+const customJestConfig = {
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testEnvironment: 'jest-environment-jsdom',
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/**/*.stories.{js,jsx,ts,tsx}',
+    '!src/app/layout.tsx'
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    }
+  },
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1'
+  }
+};
+
+module.exports = createJestConfig(customJestConfig);
+
+// jest.setup.js
+import '@testing-library/jest-dom';
+import { server } from './src/mocks/server';
+
+beforeAll(() => server.listen());
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+```
+
+### 7.2. Testes de Componentes
+```typescript
+// src/components/GNRETable/GNRETable.test.tsx
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { GNRETable } from './GNRETable';
+import { mockGNREs } from '@/mocks/data';
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false }
+  }
+});
+
+const renderWithProviders = (ui: React.ReactElement) => {
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+};
+
+describe('GNRETable', () => {
+  it('should render GNRE list correctly', async () => {
+    renderWithProviders(<GNRETable />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Lista de GNREs')).toBeInTheDocument();
+    });
+
+    // Verificar se os dados mockados aparecem
+    expect(screen.getByText(mockGNREs[0].client_name)).toBeInTheDocument();
+    expect(screen.getByText('R$ 150,00')).toBeInTheDocument();
+  });
+
+  it('should filter GNREs by status', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GNRETable />);
+
+    // Abrir filtro de status
+    await user.click(screen.getByRole('button', { name: /filtrar por status/i }));
+
+    // Selecionar apenas "GERADO"
+    await user.click(screen.getByRole('checkbox', { name: /gerado/i }));
+
+    // Verificar se apenas GNREs com status GERADO aparecem
+    await waitFor(() => {
+      const statusBadges = screen.getAllByTestId('gnre-status-badge');
+      statusBadges.forEach(badge => {
+        expect(badge).toHaveTextContent('GERADO');
+      });
+    });
+  });
+
+  it('should handle download PDF action', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GNRETable />);
+
+    // Clicar no botão de download da primeira GNRE
+    await user.click(screen.getAllByRole('button', { name: /download pdf/i })[0]);
+
+    // Verificar se o download foi iniciado
+    await waitFor(() => {
+      expect(screen.getByText(/download iniciado/i)).toBeInTheDocument();
+    });
+  });
+});
+```
+
+### 7.3. Testes E2E com Playwright
+```typescript
+// e2e/gnre-workflow.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('GNRE Workflow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Login
+    await page.goto('/login');
+    await page.fill('[data-testid="email-input"]', 'test@example.com');
+    await page.fill('[data-testid="password-input"]', 'password123');
+    await page.click('[data-testid="login-button"]');
+
+    // Aguardar redirecionamento para dashboard
+    await expect(page).toHaveURL('/dashboard');
+  });
+
+  test('should complete full GNRE generation workflow', async ({ page }) => {
+    // Navegar para geração de GNRE
+    await page.click('[data-testid="nav-gnre-generation"]');
+    await expect(page).toHaveURL('/gnre');
+
+    // Upload de XML
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles('e2e/fixtures/sample-nfe.xml');
+
+    // Aguardar processamento
+    await expect(page.locator('[data-testid="processing-indicator"]')).toBeVisible();
+    await expect(page.locator('[data-testid="processing-indicator"]')).toBeHidden({ timeout: 30000 });
+
+    // Verificar se GNRE apareceu na tabela
+    await expect(page.locator('[data-testid="gnre-table"]')).toContainText('PROCESSANDO');
+
+    // Aguardar geração completa
+    await page.waitForTimeout(5000);
+    await page.reload();
+
+    // Verificar status final
+    await expect(page.locator('[data-testid="gnre-table"]')).toContainText('GERADO');
+
+    // Download PDF
+    await page.click('[data-testid="download-pdf-button"]');
+
+    // Verificar se download foi iniciado
+    const downloadPromise = page.waitForEvent('download');
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+  });
+
+  test('should handle upload errors gracefully', async ({ page }) => {
+    await page.goto('/gnre');
+
+    // Upload arquivo inválido
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles('e2e/fixtures/invalid-file.txt');
+
+    // Verificar mensagem de erro
+    await expect(page.locator('[data-testid="error-toast"]')).toContainText('Formato de arquivo inválido');
+  });
+});
+```
+
+## 📊 Observabilidade Frontend
+
+### 8.1. Error Boundary com Logging
+```typescript
+// src/components/ErrorBoundary.tsx
+'use client';
+
+import React from 'react';
+import * as Sentry from '@sentry/nextjs';
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends React.Component<
+  React.PropsWithChildren<{}>,
+  ErrorBoundaryState
+> {
+  constructor(props: React.PropsWithChildren<{}>) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Log para Sentry
+    Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack
+        }
+      }
+    });
+
+    // Log estruturado
+    console.error('React Error Boundary caught an error:', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-gray-800">
+                  Algo deu errado
+                </h3>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600 mb-4">
+              Ocorreu um erro inesperado. Nossa equipe foi notificada e está trabalhando para resolver o problema.
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Recarregar Página
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+### 8.2. Performance Monitoring
+```typescript
+// src/lib/performance.ts
+import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
+
+function sendToAnalytics(metric: any) {
+  // Enviar para serviço de analytics
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', metric.name, {
+      event_category: 'Web Vitals',
+      event_label: metric.id,
+      value: Math.round(metric.name === 'CLS' ? metric.value * 1000 : metric.value),
+      non_interaction: true
+    });
+  }
+
+  // Log estruturado
+  console.log('Web Vital:', {
+    name: metric.name,
+    value: metric.value,
+    id: metric.id,
+    timestamp: Date.now()
+  });
+}
+
+export function initPerformanceMonitoring() {
+  getCLS(sendToAnalytics);
+  getFID(sendToAnalytics);
+  getFCP(sendToAnalytics);
+  getLCP(sendToAnalytics);
+  getTTFB(sendToAnalytics);
+}
+```
+
+---
+
+*Este documento é atualizado com cada release do frontend e revisado pela equipe de desenvolvimento.*
